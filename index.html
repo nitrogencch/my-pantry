@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>我家的糧倉 App</title>
+    <style>
+        :root { --primary: #3ecf8e; --ai-purple: #805ad5; --danger: #ff4d4f; --text: #2d3748; --bg: #f4f7f6; --gray: #718096; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0; overflow-x: hidden; }
+        
+        /* 頁面切換 */
+        .page { display: none; padding: 20px; padding-bottom: 120px; min-height: 100vh; }
+        .page.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+        h1 { margin: 0; font-size: 24px; }
+        .sub-text { color: var(--gray); font-size: 14px; margin-top: 5px; }
+
+        /* --- 錄入頁面 --- */
+        .card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .input-group { position: relative; margin: 20px 0; }
+        textarea { 
+            width: 100%; height: 160px; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; 
+            font-size: 16px; background: #fff; line-height: 1.5; resize: none;
+        }
+        .voice-btn { 
+            position: absolute; bottom: 12px; right: 12px; background: #4a5568; color: white; 
+            border: none; width: 45px; height: 45px; border-radius: 50%; cursor: pointer; font-size: 20px;
+            display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .voice-btn.recording { background: var(--danger); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(255, 77, 79, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 77, 79, 0); } }
+
+        /* --- 庫存頁面 --- */
+        .filter-bar { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0; margin-bottom: 15px; scrollbar-width: none; border-bottom: 1px solid #eee; }
+        .filter-bar::-webkit-scrollbar { display: none; }
+        .filter-chip { background: white; border: 1px solid #cbd5e0; padding: 7px 15px; border-radius: 20px; font-size: 13px; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+        .filter-chip.active { background: var(--ai-purple); color: white; border-color: var(--ai-purple); }
+        
+        .item-card { background: white; padding: 15px; border-radius: 15px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        .item-info { flex: 1; }
+        .item-info h3 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 6px; }
+        .cat-tag { font-size: 10px; background: #edf2f7; color: var(--gray); padding: 2px 6px; border-radius: 4px; font-weight: normal; }
+        
+        .qty-controls { display: flex; align-items: center; gap: 8px; background: #f8fafc; padding: 5px; border-radius: 20px; border: 1px solid #eee; }
+        .qty-btn { background: white; border: 1px solid #ddd; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-weight: bold; }
+        
+        .expiry-badge { padding: 4px 8px; border-radius: 20px; font-size: 11px; font-weight: bold; min-width: 70px; text-align: center; }
+        .status-good { background: #dcfce7; color: #166534; }
+        .status-warning { background: #fef3c7; color: #92400e; }
+        .status-expired { background: #fee2e2; color: #991b1b; }
+
+        /* --- 底部導航欄 --- */
+        nav.tab-bar { 
+            position: fixed; bottom: 0; left: 0; right: 0; background: white; 
+            height: 75px; display: flex; box-shadow: 0 -2px 15px rgba(0,0,0,0.05); 
+            z-index: 1000; padding-bottom: env(safe-area-inset-bottom);
+        }
+        .tab-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; color: var(--gray); font-size: 12px; gap: 4px; }
+        .tab-item.active { color: var(--ai-purple); font-weight: bold; }
+        .tab-icon { font-size: 22px; }
+
+        /* 按鈕與組件 */
+        .btn-main { background: var(--primary); color: white; border: none; padding: 16px; border-radius: 12px; width: 100%; font-size: 16px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(62, 207, 142, 0.2); }
+        .btn-ai-cook { background: var(--ai-purple); color: white; border: none; padding: 12px 20px; border-radius: 10px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 12px rgba(128, 90, 213, 0.3); }
+        .btn-clear { background: transparent; border: 1px solid var(--danger); color: var(--danger); padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: bold; }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 2000; }
+        .modal-content { background: white; margin: 10vh auto; padding: 25px; border-radius: 25px; width: 90%; max-width: 450px; height: 75vh; overflow-y: auto; position: relative; }
+        #status { margin-top: 15px; padding: 12px; border-radius: 10px; font-size: 14px; display: none; line-height: 1.5; }
+    </style>
+</head>
+<body>
+
+<div id="addPage" class="page active">
+    <header>
+        <div>
+            <h1>🎙️ 今日買咗咩？</h1>
+            <p class="sub-text">可以鍵盤輸入或直接講廣東話即可分類及記錄</p>
+        </div>
+    </header>
+    <div class="card">
+        <div class="input-group">
+            <textarea id="userInput" placeholder="例如：買咗兩盒鮮奶後日到期"></textarea>
+            <button id="voiceBtn" class="voice-btn">🎤</button>
+        </div>
+        <button class="btn-main" onclick="saveToDB()">儲存到糧倉</button>
+        <div id="status"></div>
+    </div>
+</div>
+
+<div id="listPage" class="page">
+    <header>
+        <div>
+            <h1>📋 糧倉清單</h1>
+            <p class="sub-text">勾選食材讓 AI 諗食譜</p>
+        </div>
+        <button class="btn-clear" onclick="clearExpired()">🧹 清空過期</button>
+    </header>
+
+    <div class="filter-bar" id="filterBar">
+        <div class="filter-chip active" onclick="setFilter('全部')">全部</div>
+        <div class="filter-chip" onclick="setFilter('肉類海鮮')">🥩 肉類海鮮</div>
+        <div class="filter-chip" onclick="setFilter('蔬菜')">🥦 蔬菜</div>
+        <div class="filter-chip" onclick="setFilter('水果')">🍎 水果</div>
+        <div class="filter-chip" onclick="setFilter('奶製品')">🥛 雞蛋奶類</div>
+        <div class="filter-chip" onclick="setFilter('五穀雜糧')">🍚 五穀雜糧</div>
+        <div class="filter-chip" onclick="setFilter('冷凍食品')">❄️ 冷凍食品</div>
+        <div class="filter-chip" onclick="setFilter('乾貨罐頭')">🥫 乾貨罐頭</div>
+        <div class="filter-chip" onclick="setFilter('調味醬料')">🧂 調味醬料</div>
+        <div class="filter-chip" onclick="setFilter('零食')">🍪 零食</div>
+        <div class="filter-chip" onclick="setFilter('飲品')">🥤 飲品</div>
+        <div class="filter-chip" onclick="setFilter('其他')">❓ 其他</div>
+    </div>
+
+    <div id="inventoryList">載入中...</div>
+
+    <div style="position: fixed; bottom: 90px; right: 20px;">
+        <button class="btn-ai-cook" onclick="generateRecipe()">👨‍🍳 今晚煮咩好？</button>
+    </div>
+</div>
+
+<nav class="tab-bar">
+    <div class="tab-item active" onclick="switchTab('addPage', this)">
+        <span class="tab-icon">➕</span>
+        <span>新增</span>
+    </div>
+    <div class="tab-item" onclick="switchTab('listPage', this)">
+        <span class="tab-icon">📋</span>
+        <span>庫存</span>
+    </div>
+</nav>
+
+<div id="recipeModal" class="modal">
+    <div class="modal-content">
+        <span onclick="closeModal()" style="position:absolute; right:20px; cursor:pointer; font-size:30px; color:#aaa;">&times;</span>
+        <h2 style="color:var(--ai-purple); margin-top:0;">👨‍🍳 AI 私人食譜</h2>
+        <hr border="0" style="border-top:1px solid #eee; margin:15px 0;">
+        <div id="recipeText" style="white-space: pre-wrap; line-height: 1.8; font-size: 15px;"></div>
+    </div>
+</div>
+
+<script type="module">
+    const config = {
+        URL: 'https://mtnqrynrlwwzdlfsdqyd.supabase.co',
+        KEY: 'sb_publishable_Wa3CZ5UabvpXBvTgeiyHLw_aR-pWLrp',
+        DS_KEY: 'sk-13f98935aca14dcaba389823b0e52937',
+        USER_ID: '884eb193-997a-4694-9384-b9c1a079de88'
+    };
+
+    let allItems = [];
+    let currentFilter = '全部';
+
+    // --- 切換分頁 ---
+    window.switchTab = (pageId, el) => {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(pageId).classList.add('active');
+        document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+        el.classList.add('active');
+        if(pageId === 'listPage') fetchInventory();
+        window.scrollTo(0, 0);
+    };
+
+    // --- 語音功能 ---
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+        const rec = new SpeechRecognition();
+        rec.lang = 'zh-HK';
+        document.getElementById('voiceBtn').onclick = () => {
+            rec.start();
+            document.getElementById('voiceBtn').classList.add('recording');
+        };
+        rec.onresult = (e) => {
+            document.getElementById('userInput').value = e.results[0][0].transcript;
+        };
+        rec.onend = () => document.getElementById('voiceBtn').classList.remove('recording');
+    }
+
+    // --- 儲存物資 ---
+    window.saveToDB = async () => {
+        const input = document.getElementById('userInput');
+        const status = document.getElementById('status');
+        if (!input.value.trim()) return;
+
+        status.style.display = 'block';
+        status.className = 'loading';
+        status.innerText = "🤖 AI 智能分析中...";
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        try {
+            const aiRes = await fetch('https://api.deepseek.com/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.DS_KEY}` },
+                body: JSON.stringify({
+                    model: "deepseek-chat",
+                    messages: [
+                        { role: "system", content: `今日是${todayStr}。請提取數據並分類。類別必須從中選擇：'肉類海鮮','蔬菜','水果','奶製品','五穀雜糧','冷凍食品','乾貨罐頭','調味醬料','零食','飲品','其他'。僅返回 JSON。` },
+                        { role: "user", content: `內容: "${input.value.trim()}"。格式: {"food_name":"string","quantity":number,"unit":"string","expiry_date":"YYYY-MM-DD","category":"string"}` }
+                    ],
+                    response_format: { type: 'json_object' }
+                })
+            });
+            const extracted = JSON.parse((await aiRes.json()).choices[0].message.content);
+
+            await fetch(`${config.URL}/rest/v1/pantry_items`, {
+                method: 'POST',
+                headers: { 'apikey': config.KEY, 'Authorization': `Bearer ${config.KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...extracted, user_id: config.USER_ID })
+            });
+
+            status.className = 'success';
+            status.innerText = `✅ 已成功分類為 [${extracted.category}] 並加入糧倉`;
+            input.value = '';
+            setTimeout(() => { status.style.display = 'none'; }, 3000);
+        } catch (e) { 
+            status.className = 'error';
+            status.innerText = "❌ 解析或儲存失敗"; 
+        }
+    };
+
+    // --- 庫存讀取 ---
+    async function fetchInventory() {
+        const res = await fetch(`${config.URL}/rest/v1/pantry_items?select=*&order=expiry_date.asc`, {
+            headers: { 'apikey': config.KEY, 'Authorization': `Bearer ${config.KEY}` }
+        });
+        allItems = await res.json();
+        renderList();
+    }
+
+    function renderList() {
+        const listDiv = document.getElementById('inventoryList');
+        listDiv.innerHTML = '';
+        
+        const safeItems = allItems.map(i => ({ ...i, category: i.category || '其他' }));
+        const filtered = currentFilter === '全部' ? safeItems : safeItems.filter(i => i.category === currentFilter);
+
+        if(!filtered.length) {
+            listDiv.innerHTML = `<p style="text-align:center; padding:40px; color:#aaa;">${currentFilter} 類別暫無物資</p>`;
+            return;
+        }
+
+        filtered.forEach(item => {
+            const today = new Date();
+            const exp = new Date(item.expiry_date);
+            const diff = Math.ceil((exp - today) / (86400000));
+            const badge = diff <= 0 ? 'status-expired' : (diff <= 3 ? 'status-warning' : 'status-good');
+
+            const card = document.createElement('div');
+            card.className = 'item-card';
+            card.innerHTML = `
+                <input type="checkbox" class="checkbox-custom" value="${item.food_name}">
+                <div class="item-info">
+                    <h3>${item.food_name} <span class="cat-tag">${item.category}</span></h3>
+                    <p>📅 ${item.expiry_date || '無日期'} • ${item.unit || '件'}</p>
+                </div>
+                <div class="qty-controls">
+                    <button class="qty-btn" onclick="updateQty('${item.id}', ${item.quantity-1})">➖</button>
+                    <span style="font-weight:bold; min-width:15px; text-align:center;">${item.quantity}</span>
+                    <button class="qty-btn" onclick="updateQty('${item.id}', ${item.quantity+1})">➕</button>
+                </div>
+                <div class="expiry-badge ${badge}">${diff <= 0 ? '已過期' : diff + '日後'}</div>
+            `;
+            listDiv.appendChild(card);
+        });
+    }
+
+    // --- 數量更新與刪除 ---
+    window.updateQty = async (id, q) => {
+        if (q <= 0 && !confirm("數量為零，要刪除此項嗎？")) return;
+        const method = q <= 0 ? 'DELETE' : 'PATCH';
+        await fetch(`${config.URL}/rest/v1/pantry_items?id=eq.${id}`, {
+            method,
+            headers: { 'apikey': config.KEY, 'Authorization': `Bearer ${config.KEY}`, 'Content-Type': 'application/json' },
+            body: q > 0 ? JSON.stringify({ quantity: q }) : null
+        });
+        fetchInventory();
+    };
+
+    // --- 清空過期 ---
+    window.clearExpired = async () => {
+        const today = new Date().toISOString().split('T')[0];
+        const toDelete = allItems.filter(i => i.expiry_date && i.expiry_date < today);
+        if(!toDelete.length) return alert("沒有過期物資");
+        if(!confirm(`確定刪除 ${toDelete.length} 項過期物資？`)) return;
+        
+        await fetch(`${config.URL}/rest/v1/pantry_items?expiry_date=lt.${today}`, {
+            method: 'DELETE',
+            headers: { 'apikey': config.KEY, 'Authorization': `Bearer ${config.KEY}` }
+        });
+        fetchInventory();
+    };
+
+    // --- AI 食譜 ---
+    window.generateRecipe = async () => {
+        const checked = Array.from(document.querySelectorAll('.checkbox-custom:checked')).map(c => c.value);
+        if(!checked.length) return alert("請先勾選想煮的食材");
+        
+        document.getElementById('recipeModal').style.display = 'block';
+        document.getElementById('recipeText').innerText = "👨‍🍳 你的專業營養師構思中...";
+        
+        try {
+            const res = await fetch('https://api.deepseek.com/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.DS_KEY}` },
+                body: JSON.stringify({
+                    model: "deepseek-chat",
+                    messages: [
+                        { role: "system", content: "你是進行生酮飲食中、注重健康、味道的營養師，用流利廣東話回答。根據食材建議 1-2 個家常食譜及簡單步驟。可以簡單講一下營養配搭方面咁食有咩好！如果係非健康，可以作提醒但都可以容讓減重有休息既空間。語氣盡量鼓勵性同正面。" },
+                        { role: "user", content: `我有：${checked.join('、')}。` }
+                    ]
+                })
+            });
+            const data = await res.json();
+            document.getElementById('recipeText').innerText = data.choices[0].message.content;
+        } catch (e) {
+            document.getElementById('recipeText').innerText = "❌ 暫時無法連線到 AI 廚師。";
+        }
+    };
+
+    window.setFilter = (c) => {
+        currentFilter = c;
+        document.querySelectorAll('.filter-chip').forEach(f => f.classList.toggle('active', f.innerText.includes(c)));
+        renderList();
+    };
+    window.closeModal = () => document.getElementById('recipeModal').style.display = 'none';
+
+    fetchInventory();
+</script>
+
+</body>
+</html>
